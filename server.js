@@ -1,29 +1,34 @@
-// server.js
-require('dotenv').config();
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const path = require('path');
-const apiRoutes = require('./routes'); // Será criado nos próximos passos
-
-const app = express();
-const PORT = process.env.PORT || 5000;
-
-// Middlewares essenciais
-app.use(cors());
-app.use(express.json()); // Para parsear JSON no body das requisições
-app.use(express.urlencoded({ extended: true })); 
-
-// Servir os arquivos estáticos do front-end (HTML, CSS, JS) futuramente
-app.use(express.static(path.join(__dirname)));
-
-// Definição das rotas da API
-app.use('/api', apiRoutes);
+const bcrypt = require('bcryptjs');
+const { User } = require('./models');
 
 // Conexão com o MongoDB
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => {
+  .then(async () => {
     console.log('🔥 MongoDB conectado com sucesso!');
+    
+    // --- SCRIPT SEGURO PARA CRIAR O PRIMEIRO ADMIN ---
+    try {
+      const initialUser = process.env.ADMIN_USERNAME;
+      const initialPass = process.env.ADMIN_PASSWORD;
+
+      // Só tenta criar se as variáveis existirem no Render
+      if (initialUser && initialPass) {
+        const adminExists = await User.findOne({ username: initialUser });
+        if (!adminExists) {
+          const hashedPassword = await bcrypt.hash(initialPass, 10); 
+          await User.create({
+            username: initialUser,
+            password: hashedPassword,
+            role: 'admin'
+          });
+          console.log('✅ Admin inicial criado com sucesso via Variáveis de Ambiente!');
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao verificar/criar admin:', err);
+    }
+    // ------------------------------------------
+
     app.listen(PORT, () => {
       console.log(`🚀 Servidor rodando perfeitamente na porta ${PORT}`);
     });
@@ -32,9 +37,3 @@ mongoose.connect(process.env.MONGO_URI)
     console.error('❌ Erro crítico ao conectar no MongoDB:', err);
     process.exit(1);
   });
-
-// Tratamento de erros globais
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Ocorreu um erro interno no servidor.' });
-});
