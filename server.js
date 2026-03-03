@@ -58,8 +58,15 @@ mongoose.connect(process.env.MONGO_URI)
     process.exit(1);
   });
 
-// Tratamento de erros globais
+// ==========================================
+// TRATAMENTO DE ERROS GLOBAIS (ATUALIZADO)
+// ==========================================
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Ocorreu um erro interno no servidor.' });
+  // Mostra o erro detalhado nos logs do Render
+  console.error('ERRO DETECTADO NO SERVIDOR:', err.stack);
+  
+  // Devolve a mensagem exata do erro para o alerta do Front-end
+  res.status(500).json({ 
+    error: err.message || 'Erro desconhecido no servidor. Verifique os logs do Render.' 
+  }); 
 });
