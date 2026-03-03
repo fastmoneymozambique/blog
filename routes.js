@@ -9,7 +9,6 @@ const {
   createPost,
   getPosts,
   getPostBySlug,
-  registerInteraction,
   deletePost
 } = require('./controllers');
 
@@ -19,37 +18,38 @@ const { authenticateAdmin, upload } = require('./utils');
 // ==========================================
 // 1. ROTAS DE AUTENTICAÇÃO
 // ==========================================
-// Rota para o Admin fazer login e receber o Token JWT
 router.post('/admin/login', adminLogin);
 
 // ==========================================
-// 2. ROTAS PÚBLICAS (Visitantes e SEO)
+// 2. ROTAS PÚBLICAS
 // ==========================================
-// Listar todas as categorias no menu do blog
+// Listar categorias
 router.get('/categories', getCategories);
 
-// Listar posts na página inicial (suporta ?search= e ?category=)
+// Listar posts (Home)
 router.get('/posts', getPosts);
 
-// Abrir um post completo pela URL amigável (já incrementa a "view" automaticamente)
+// Abrir um post completo pelo Slug
 router.get('/posts/:slug', getPostBySlug);
 
-// Rota crucial para o Dashboard: O front-end chama essa rota via fetch() 
-// toda vez que um banner for clicado ou gerado na tela (impressão)
-router.post('/posts/:id/interaction', registerInteraction);
-
 // ==========================================
-// 3. ROTAS PROTEGIDAS (Painel Admin)
+// 3. ROTAS PROTEGIDAS (PAINEL ADMIN)
 // ==========================================
-// Criar uma nova categoria (Exige Token Admin)
+// Criar categoria
 router.post('/categories', authenticateAdmin, createCategory);
 
-// Criar um novo post. 
-// Nota: O upload.single('media') intercepta o arquivo de vídeo ou imagem,
-// manda pro Cloudinary, e só depois passa para a função createPost.
-router.post('/posts', authenticateAdmin, upload.single('media'), createPost);
+// CRIAR POST (Configuração para 3 campos de mídia diferentes)
+router.post('/posts', 
+  authenticateAdmin, 
+  upload.fields([
+    { name: 'mediaPrincipal', maxCount: 1 },
+    { name: 'mediaMeio', maxCount: 1 },
+    { name: 'mediaFim', maxCount: 1 }
+  ]), 
+  createPost
+);
 
-// Deletar um post e limpar a mídia do Cloudinary para economizar espaço
+// Deletar post
 router.delete('/posts/:id', authenticateAdmin, deletePost);
 
 module.exports = router;

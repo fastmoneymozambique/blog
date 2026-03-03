@@ -10,7 +10,6 @@ exports.adminLogin = async (req, res) => {
   try {
     const { username, password } = req.body;
     const user = await User.findOne({ username });
-    
     if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -33,7 +32,7 @@ exports.createCategory = async (req, res) => {
     const category = await Category.create({ name, slug });
     res.status(201).json(category);
   } catch (error) {
-    res.status(400).json({ error: 'Erro ao criar categoria. Pode já existir.' });
+    res.status(400).json({ error: 'Erro ao criar categoria.' });
   }
 };
 
@@ -47,37 +46,49 @@ exports.getCategories = async (req, res) => {
 };
 
 // ==========================================
-// 3. POSTS (CRUD E SEO)
+// 3. POSTS (CRUD COM 3 MÍDIAS)
 // ==========================================
 exports.createPost = async (req, res) => {
   try {
     const { title, summary, content, category, metaTitle, metaDescription, keywords } = req.body;
     const slug = generateSlug(title);
     
-    let mediaData = { url: '', public_id: '', resource_type: 'none' };
-
-    // Se um arquivo foi enviado pelo Multer/Cloudinary
-    if (req.file) {
-      mediaData = {
-        url: req.file.path,
-        public_id: req.file.filename,
-        resource_type: req.file.mimetype.startsWith('video') ? 'video' : 'image'
-      };
-    }
+    // Função auxiliar para processar cada arquivo enviado
+    const formatMedia = (files, fieldName) => {
+      if (files && files[fieldName] && files[fieldName][0]) {
+        const file = files[fieldName][0];
+        return {
+          url: file.path,
+          public_id: file.filename,
+          resource_type: file.mimetype.startsWith('video') ? 'video' : 'image'
+        };
+      }
+      return { url: '', public_id: '', resource_type: 'none' };
+    };
 
     const post = await Post.create({
-      title, slug, summary, content, category,
-      media: mediaData,
-      seo: { metaTitle, metaDescription, keywords: keywords ? keywords.split(',') : [] }
+      title, 
+      slug, 
+      summary, 
+      content, 
+      category,
+      mediaPrincipal: formatMedia(req.files, 'mediaPrincipal'),
+      mediaMeio: formatMedia(req.files, 'mediaMeio'),
+      mediaFim: formatMedia(req.files, 'mediaFim'),
+      seo: { 
+        metaTitle, 
+        metaDescription, 
+        keywords: keywords ? keywords.split(',') : [] 
+      }
     });
 
     res.status(201).json(post);
   } catch (error) {
+    console.error(error);
     res.status(400).json({ error: 'Erro ao criar post.', details: error.message });
   }
 };
 
-// Busca todos os posts (com paginação e filtros de pesquisa/categoria)
 exports.getPosts = async (req, res) => {
   try {
     const { search, category, page = 1, limit = 10 } = req.query;
@@ -93,22 +104,17 @@ exports.getPosts = async (req, res) => {
       .skip((page - 1) * limit);
       
     const count = await Post.countDocuments(query);
-    
     res.json({ posts, totalPages: Math.ceil(count / limit), currentPage: page });
   } catch (error) {
     res.status(500).json({ error: 'Erro ao buscar posts.' });
   }
 };
 
-// ==========================================
-// 4. MÉTRICAS E DASHBOARD
-// ==========================================
-// Busca um post específico e INCREMENTA a visualização (Views)
 exports.getPostBySlug = async (req, res) => {
   try {
     const post = await Post.findOneAndUpdate(
       { slug: req.params.slug, published: true },
-      { $inc: { 'metrics.views': 1 } }, // Incrementa 1 view automaticamente
+      { $inc: { 'metrics.views': 1 } },
       { new: true }
     ).populate('category', 'name slug');
 
@@ -119,40 +125,23 @@ exports.getPostBySlug = async (req, res) => {
   }
 };
 
-// Rota para o front-end disparar quando houver uma impressão ou clique em anúncio
-exports.registerInteraction = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { type } = req.body; // 'clicks' ou 'impressions'
-
-    if (!['clicks', 'impressions'].includes(type)) {
-      return res.status(400).json({ error: 'Tipo de interação inválida.' });
-    }
-
-    // O hook no models.js vai recalcular a receita (revenue) automaticamente ao salvar
-    const post = await Post.findById(id);
-    if (!post) return res.status(404).json({ error: 'Post não encontrado.' });
-
-    post.metrics[type] += 1;
-    await post.save(); // Dispara o recalculo de CPC/CPM
-
-    res.json({ message: `${type} incrementado com sucesso.`, metrics: post.metrics });
-  } catch (error) {
-    res.status(500).json({ error: 'Erro ao registrar interação.' });
-  }
-};
-
 // ==========================================
-// 5. EXCLUSÃO COM LIMPEZA NO CLOUDINARY
+// 4. EXCLUSÃO (LIMPA ATÉ 3 MÍDIAS NO CLOUDINARY)
 // ==========================================
 exports.deletePost = async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ error: 'Post não encontrado.' });
 
-    // Se tem mídia no Cloudinary, deleta lá também para não gastar espaço
-    if (post.media && post.media.public_id) {
-      await cloudinary.uploader.destroy(post.media.public_id, { resource_type: post.media.resource_type });
+    // Lista de campos de mídia para verificar e deletar
+    const mediaFields = ['mediaPrincipal', 'mediaMeio', 'mediaFim'];
+
+    for (const field of mediaFields) {
+      if (post[field] && post[field].public_id) {
+        await cloudinary.uploader.destroy(post[field].public_id, { 
+          resource_type: post[field].resource_type 
+        });
+      }
     }
 
     await post.deleteOne();

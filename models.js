@@ -10,18 +10,32 @@ const userSchema = new mongoose.Schema({
 // 2. Schema de Categorias
 const categorySchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true },
-  slug: { type: String, required: true, unique: true } // Para URLs amigáveis
+  slug: { type: String, required: true, unique: true }
 }, { timestamps: true });
 
-// 3. Schema de Posts (Conteúdo, SEO, Mídia e Métricas)
+// 3. Schema de Posts (Estrutura com 3 posições de mídia)
 const postSchema = new mongoose.Schema({
   title: { type: String, required: true },
-  slug: { type: String, required: true, unique: true }, // URL amigável (ex: meu-primeiro-post)
+  slug: { type: String, required: true, unique: true },
   summary: { type: String, required: true },
   content: { type: String, required: true },
   
-  // Cloudinary Mídia
-  media: {
+  // Mídia do Topo (Principal)
+  mediaPrincipal: {
+    url: { type: String, default: '' },
+    public_id: { type: String, default: '' },
+    resource_type: { type: String, enum: ['image', 'video', 'none'], default: 'none' }
+  },
+
+  // Mídia do Meio (Entre parágrafos)
+  mediaMeio: {
+    url: { type: String, default: '' },
+    public_id: { type: String, default: '' },
+    resource_type: { type: String, enum: ['image', 'video', 'none'], default: 'none' }
+  },
+
+  // Mídia do Fim (Encerramento)
+  mediaFim: {
     url: { type: String, default: '' },
     public_id: { type: String, default: '' },
     resource_type: { type: String, enum: ['image', 'video', 'none'], default: 'none' }
@@ -29,36 +43,19 @@ const postSchema = new mongoose.Schema({
   
   category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
   
-  // SEO Avançado
   seo: {
     metaTitle: { type: String },
     metaDescription: { type: String },
     keywords: { type: [String] }
   },
 
-  // Sistema de Métricas e Monetização
   metrics: {
     views: { type: Number, default: 0 },
-    impressions: { type: Number, default: 0 }, // Impressões de anúncios/banners
-    clicks: { type: Number, default: 0 },      // Cliques gerados no post
-    cpc: { type: Number, default: 0.15 },      // Custo Por Clique (padrão)
-    cpm: { type: Number, default: 1.50 },      // Custo Por Mil Impressões (padrão)
-    revenue: { type: Number, default: 0 }      // Receita gerada pelo post
+    revenue: { type: Number, default: 0 } // Receita manual ou simplificada
   },
   
   published: { type: Boolean, default: true }
 }, { timestamps: true });
-
-// Middleware do Mongoose: Calcula a receita automaticamente antes de salvar no banco
-// Receita = (Cliques * CPC) + ((Impressões / 1000) * CPM)
-postSchema.pre('save', function(next) {
-  if (this.isModified('metrics.clicks') || this.isModified('metrics.impressions') || this.isModified('metrics.cpc') || this.isModified('metrics.cpm')) {
-    const revenueFromClicks = this.metrics.clicks * this.metrics.cpc;
-    const revenueFromImpressions = (this.metrics.impressions / 1000) * this.metrics.cpm;
-    this.metrics.revenue = revenueFromClicks + revenueFromImpressions;
-  }
-  next();
-});
 
 // Exportando os modelos
 const User = mongoose.model('User', userSchema);
