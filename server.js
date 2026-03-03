@@ -1,7 +1,27 @@
+require('dotenv').config();
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const path = require('path');
 const bcrypt = require('bcryptjs');
+
+// Importando as rotas e o modelo de Usuário
+const apiRoutes = require('./routes');
 const { User } = require('./models');
 
-// Conexão com o MongoDB
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middlewares essenciais
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true })); 
+app.use(express.static(path.join(__dirname)));
+
+// Definição das rotas da API
+app.use('/api', apiRoutes);
+
+// Conexão com o MongoDB e criação segura do Admin
 mongoose.connect(process.env.MONGO_URI)
   .then(async () => {
     console.log('🔥 MongoDB conectado com sucesso!');
@@ -27,7 +47,7 @@ mongoose.connect(process.env.MONGO_URI)
     } catch (err) {
       console.error('Erro ao verificar/criar admin:', err);
     }
-    // ------------------------------------------
+    // ------------------------------------------------
 
     app.listen(PORT, () => {
       console.log(`🚀 Servidor rodando perfeitamente na porta ${PORT}`);
@@ -37,3 +57,9 @@ mongoose.connect(process.env.MONGO_URI)
     console.error('❌ Erro crítico ao conectar no MongoDB:', err);
     process.exit(1);
   });
+
+// Tratamento de erros globais
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Ocorreu um erro interno no servidor.' });
+});
